@@ -2,69 +2,69 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# 1. Setup Page Vibe
+# 1. Page Config
 st.set_page_config(page_title="Mat Side DFW", page_icon="🥋", layout="wide")
 
-st.title("🥋 Mat Side DFW")
-st.subheader("DFW's Ultimate Open Mat Finder")
+# Custom CSS to make the multi-select look more like "buttons" (Streamlit hack)
+st.markdown("""
+    <style>
+    .stMultiSelect div[data-baseweb="tag"] {
+        background-color: #007bff;
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# 2. Load Data (Using your uploaded CSV)
+st.title("🥋 Mat Side DFW")
+
+# 2. Load and Clean Data
 @st.cache_data
 def load_data():
     df = pd.read_csv("DFW Open Mats - Tracker - Open Mats.csv")
-    # Clean up day names (stripping whitespace)
     df['Day'] = df['Day'].str.strip()
+    
+    # Convert 'Start Time' to a datetime object so we can sort it properly
+    # This handles formats like "11:00 AM"
+    df['sort_time'] = pd.to_datetime(df['Start Time'], errors='coerce').dt.time
     return df
 
 df = load_data()
 
-# 3. Sidebar Navigation & Filters
-st.sidebar.header("Filter Your Roll")
+# 3. Sidebar Setup
+st.sidebar.header("Find a Training Session")
 
-# Get current day for the "Today" feature
 days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 current_day = datetime.now().strftime("%A")
 
-# Day Selection
-selected_day = st.sidebar.selectbox(
-    "Choose a Day", 
-    ["Today"] + days_of_week,
-    index=0
-)
+selected_day = st.sidebar.selectbox("Choose a Day", ["Today"] + days_of_week)
+day_to_query = current_day if selected_day == "Today" else selected_day
 
-# Style Filter
-style_options = df['Gi or Nogi'].unique().tolist()
-selected_style = st.sidebar.multiselect("Style", style_options, default=style_options)
+# Style Toggles (using multiselect which acts as toggle buttons)
+style_options = ["Gi", "No Gi", "Both"]
+selected_styles = st.sidebar.multiselect("Select Style(s)", style_options, default=style_options)
 
-# 4. Logic: Filtering the Data
-if selected_day == "Today":
-    query_day = current_day
-    st.info(f"Showing Open Mats for Today ({current_day})")
-else:
-    query_day = selected_day
-    st.info(f"Showing Open Mats for {selected_day}")
+# 4. Filter and Sort
+mask = (df['Day'] == day_to_query) & (df['Gi or Nogi'].isin(selected_styles))
+filtered_df = df[mask].sort_values(by='sort_time')
 
-filtered_df = df[df['Day'] == query_day]
-filtered_df = filtered_df[filtered_df['Gi or Nogi'].isin(selected_style)]
+# 5. Map View
+st.subheader(f"📍 Mats in DFW: {day_to_query}")
 
-# 5. Display the Results
+# For the map to work, we'll use a placeholder or coordinates if available. 
+# Streamlit's st.map needs 'lat' and 'lon'. 
+# Note: For real-time address geocoding, we'd need a Google Maps API key, 
+# but for now, let's display the list and a placeholder map.
 if not filtered_df.empty:
+    # 6. List View (Sorted by Time)
     for _, row in filtered_df.iterrows():
-        with st.container():
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.markdown(f"### {row['School']}")
-                st.caption(f"📍 {row['Address']}, {row['City']}")
-            with col2:
-                st.markdown(f"**🕒 {row['Start Time']}**")
-                st.markdown(f"`{row['Gi or Nogi']}`")
-            
+        with st.expander(f"**{row['Start Time']}** - {row['School']} ({row['City']})"):
+            st.write(f"🏠 **Address:** {row['Address']}")
+            st.write(f"🥋 **Style:** {row['Gi or Nogi']}")
             if pd.notna(row['Notes']):
-                st.write(f"📝 *{row['Notes']}*")
-            st.divider()
+                st.info(f"Note: {row['Notes']}")
+            
+            # Button to open in Google Maps
+            map_url = f"https://www.google.com/maps/search/?api=1&query={row['School']}+{row['Address']}".replace(' ', '+')
+            st.link_button("Open in Google Maps", map_url)
 else:
-    st.warning(f"No open mats found for {query_day} with the selected filters.")
-
-# Phase 2 Preview in Sidebar
-st.sidebar.divider()
-st.sidebar.write("🔜 **Coming Soon:** School Directory & Local Competitions")
+    st.warning("No mats found for this selection. Try another day!")

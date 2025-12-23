@@ -5,49 +5,64 @@ from datetime import datetime
 # 1. Page Config
 st.set_page_config(page_title="DFW Mat Side", page_icon="🥋", layout="centered")
 
-# Custom CSS for absolute control over spacing
+# 2. CSS to Kill the Gaps and Force a Single Row
 st.markdown("""
     <style>
-    /* 1. Tighten the main container */
+    /* 1. Eliminate main container margins */
     .main .block-container { 
-        padding-top: 1rem !important; 
-        padding-left: 0.5rem !important; 
-        padding-right: 0.5rem !important; 
+        padding: 1rem 0.5rem !important; 
     }
     
-    /* 2. Create a custom Flexbox row for the buttons */
-    .day-container {
-        display: flex;
-        justify-content: space-between;
-        gap: 2px !important; /* This is the actual space between boxes */
-        width: 100%;
-        margin-bottom: 20px;
+    /* 2. Style the Radio buttons as a unified horizontal bar */
+    div[data-testid="stRadio"] > div {
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        gap: 0px !important; /* This physically removes the gaps */
+        background-color: #f0f2f6;
+        border-radius: 8px;
+        padding: 2px;
     }
     
-    /* 3. Style Streamlit buttons to be narrow enough for 7-wide */
-    div.stButton > button {
-        width: 100% !important;
-        padding: 4px 0px !important;
-        font-size: 0.7rem !important;
-        border-radius: 4px !important;
-        min-width: 0px !important;
+    /* 3. Make each radio option look like a button */
+    div[data-testid="stRadio"] label {
+        flex: 1;
+        text-align: center;
+        background-color: transparent;
+        border-radius: 6px;
+        padding: 6px 0px !important;
+        margin: 0px !important;
+        font-size: 0.75rem !important;
+        font-weight: 600;
+        border: none !important;
+    }
+    
+    /* 4. Hide the radio circle icon */
+    div[data-testid="stRadio"] label div[data-testid="stMarkdownContainer"] p {
+        font-size: 0.75rem !important;
+    }
+    div[data-testid="stStyle"] { display: none; }
+    
+    /* Style for when an item is selected */
+    div[data-testid="stRadio"] label[data-baseweb="radio"] {
+        background-color: #ffffff !important;
+        box-shadow: 0px 1px 3px rgba(0,0,0,0.1);
     }
 
-    /* 4. Card Styling */
+    /* Card Styling */
     .mat-card {
         background-color: white;
         border-radius: 12px;
         padding: 16px;
         margin-bottom: 12px;
         border: 1px solid #eee;
-        box-shadow: 0px 2px 4px rgba(0,0,0,0.05);
     }
-    .gym-title { color: #1f1f1f; font-size: 1.3rem; font-weight: 800; }
-    .time-badge { color: #d32f2f; font-weight: 700; font-size: 1rem; }
+    .gym-title { font-size: 1.3rem; font-weight: 800; margin-bottom: 2px; }
+    .time-badge { color: #d32f2f; font-weight: 700; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. Data Loading
+# 3. Data Prep
 @st.cache_data
 def load_data():
     try:
@@ -63,42 +78,32 @@ def load_data():
 
 df = load_data()
 
-# 3. Dynamic Day Shifting
+# 4. Day Rotation Logic
 days_full = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 today_idx = datetime.now().weekday()
 ordered_days = days_full[today_idx:] + days_full[:today_idx]
 
-if 'selected_day' not in st.session_state:
-    st.session_state.selected_day = ordered_days[0]
+# Map names for the display
+day_map = {day: (day[:3] if day != days_full[today_idx] else "Tdy") for day in ordered_days}
 
-# 4. The 7-Day Button Row (Using fixed columns to force side-by-side)
 st.title("🥋 DFW Mat Side")
-st.write("### Select Day")
 
-# forcing 7 columns with 0.1 gap ratio
-cols = st.columns(7, gap="small")
+# 5. The Segmented Control (The 7-Day Bar)
+selected_day_label = st.radio(
+    "Choose Day",
+    options=ordered_days,
+    format_func=lambda x: day_map[x],
+    label_visibility="collapsed"
+)
 
-for i, day in enumerate(ordered_days):
-    # Shortest possible labels
-    label = "Tdy" if i == 0 else day[:1] # Just 'M', 'T', 'W' etc or day[:3]
-    if i != 0:
-        label = day[:3]
-        
-    btn_type = "primary" if st.session_state.selected_day == day else "secondary"
-    
-    if cols[i].button(label, key=f"d_{day}", type=btn_type):
-        st.session_state.selected_day = day
-        st.rerun()
-
-# 5. Filter & Display
-sel_style = st.selectbox("🥋 Style Filter", ["All", "Gi", "No Gi", "Both"])
-query_day = st.session_state.selected_day
-filtered = df[df['Day'].str.contains(query_day, na=False, case=False)].sort_values('sort_time')
+# 6. Filters & Cards
+sel_style = st.selectbox("🥋 Style", ["All", "Gi", "No Gi", "Both"])
+filtered = df[df['Day'].str.contains(selected_day_label, na=False, case=False)].sort_values('sort_time')
 
 if sel_style != "All":
     filtered = filtered[filtered['Gi or Nogi'] == sel_style]
 
-st.markdown(f"---")
+st.divider()
 
 if not filtered.empty:
     for i, row in filtered.iterrows():
@@ -120,5 +125,3 @@ if not filtered.empty:
                 st.link_button("🌐 Web", row['Website'])
             else:
                 st.button("None", disabled=True, key=f"nw_{i}")
-else:
-    st.info("No mats today!")

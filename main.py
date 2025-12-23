@@ -2,142 +2,107 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# 1. Optimized Page Config for Mobile
-st.set_page_config(
-    page_title="DFW Mat Side", 
-    page_icon="🥋", 
-    layout="centered", # Centered is often better for mobile readability
-    initial_sidebar_state="collapsed" # Hide sidebar by default on mobile
-)
+# 1. Page Config
+st.set_page_config(page_title="DFW Mat Side", page_icon="🥋", layout="centered")
 
-# Custom CSS for a "Native App" Vibe on iPhone
+# Mobile-First CSS
 st.markdown("""
     <style>
-    /* Main container padding */
-    .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 5rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
-    
-    /* Custom Card Styling */
+    .main .block-container { padding-top: 1rem; padding-bottom: 5rem; }
     .mat-card {
-        background-color: #f8f9fa;
-        border-radius: 15px;
-        padding: 15px;
-        margin-bottom: 15px;
-        border: 1px solid #e0e0e0;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+        background-color: white;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+        border: 1px solid #eee;
+        box-shadow: 0px 2px 4px rgba(0,0,0,0.05);
     }
-    
-    .mat-time {
-        color: #d32f2f;
-        font-weight: bold;
-        font-size: 1.1rem;
-    }
-    
-    .school-name {
-        font-size: 1.2rem;
-        font-weight: 700;
-        margin-top: 5px;
-    }
-    
+    .gym-title { color: #1f1f1f; font-size: 1.3rem; font-weight: 800; margin-bottom: 2px; }
+    .time-badge { color: #d32f2f; font-weight: 700; font-size: 1rem; }
     .style-tag {
         display: inline-block;
-        background-color: #333;
-        color: white;
-        padding: 2px 8px;
-        border-radius: 5px;
-        font-size: 0.8rem;
+        background-color: #e8f0fe;
+        color: #1967d2;
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
         text-transform: uppercase;
-        margin-top: 5px;
     }
-    
-    /* Make buttons full width for thumbs */
-    .stButton button {
-        width: 100%;
-        border-radius: 10px;
-    }
+    .stButton button { width: 100%; border-radius: 8px; border: 1px solid #ddd; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. Data Loading & Merging
+# 2. Fix: Robust Data Merging
 @st.cache_data
-def load_and_prep_data():
-    # Load both files
-    mats_df = pd.read_csv("DFW Open Mats - Tracker - Open Mats.csv")
-    schools_df = pd.read_csv("DFW Open Mats - Tracker - Schools.csv")
+def load_data():
+    # Load sheets
+    mats = pd.read_csv("DFW Open Mats - Tracker - Open Mats.csv")
+    schools = pd.read_csv("DFW Open Mats - Tracker - Schools.csv")
     
-    # Cleaning
-    mats_df['Day'] = mats_df['Day'].str.strip()
-    mats_df['School'] = mats_df['School'].str.strip()
-    schools_df['School'] = schools_df['School'].str.strip()
+    # Clean whitespace from all string columns to prevent merge errors
+    mats = mats.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+    schools = schools.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
     
-    # Merge to get Website/Phone info from the Schools sheet
-    df = pd.merge(mats_df, schools_df[['School', 'Website', 'Phone']], on='School', how='left')
+    # Merge on School name
+    # We use 'left' join so even if a school is missing from the Schools sheet, the Mat still shows up
+    df = pd.merge(mats, schools[['School', 'Website', 'Phone']], on='School', how='left')
     
-    # Sortable time logic
+    # Create sortable time
     df['sort_time'] = pd.to_datetime(df['Start Time'], errors='coerce').dt.time
     return df
 
-df = load_and_prep_data()
+try:
+    df = load_data()
+    
+    st.title("🥋 DFW Mat Side")
 
-# 3. Top-Level Mobile Filters (No Sidebar needed)
-st.title("🥋 DFW Mat Side")
+    # 3. Mobile Navigation
+    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    curr_day = datetime.now().strftime("%A")
 
-# Day selector - using a selectbox for clean mobile UI
-days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-current_day = datetime.now().strftime("%A")
+    c1, c2 = st.columns(2)
+    with c1:
+        sel_day = st.selectbox("📅 Day", ["Today"] + days)
+    with c2:
+        sel_style = st.selectbox("🥋 Style", ["All", "Gi", "No Gi", "Both"])
 
-col1, col2 = st.columns(2)
-with col1:
-    selected_day = st.selectbox("📅 Day", ["Today"] + days_of_week)
-with col2:
-    style_filter = st.selectbox("🥋 Style", ["All", "Gi", "No Gi", "Both"])
+    query_day = curr_day if sel_day == "Today" else sel_day
+    
+    # 4. Filter and Display
+    filtered = df[df['Day'].str.contains(query_day, na=False, case=False)].sort_values('sort_time')
+    if sel_style != "All":
+        filtered = filtered[filtered['Gi or Nogi'] == sel_style]
 
-day_to_query = current_day if selected_day == "Today" else selected_day
+    st.divider()
 
-# 4. Filtering Logic
-filtered_df = df[df['Day'] == day_to_query].sort_values(by='sort_time')
+    if not filtered.empty:
+        for _, row in filtered.iterrows():
+            with st.container():
+                st.markdown(f"""
+                    <div class="mat-card">
+                        <div class="gym-title">{row['School']}</div>
+                        <div class="time-badge">🕒 {row['Start Time']}</div>
+                        <div style="color: #666; margin-bottom: 8px;">📍 {row['City']}</div>
+                        <span class="style-tag">{row['Gi or Nogi']}</span>
+                        {f'<div style="margin-top:8px; font-size:0.85rem; color:#444; border-left: 2px solid #ddd; padding-left: 8px;">{row["Notes"]}</div>' if pd.notna(row['Notes']) else ''}
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Action Buttons
+                b1, b2 = st.columns(2)
+                with b1:
+                    # Google Maps URL
+                    map_q = f"{row['School']} {row['Address']} {row['City']}".replace(" ", "+")
+                    st.link_button("📍 Directions", f"https://www.google.com/maps/search/?api=1&query={map_q}")
+                with b2:
+                    if pd.notna(row['Website']):
+                        st.link_button("🌐 Website", row['Website'])
+                    else:
+                        st.button("No Website", disabled=True)
+    else:
+        st.info(f"No mats listed for {query_day}. Time for a rest day?")
 
-if style_filter != "All":
-    filtered_df = filtered_df[filtered_df['Gi or Nogi'] == style_filter]
-
-# 5. Mobile-Optimized List View
-st.write(f"### {day_to_query} Schedule")
-
-if not filtered_df.empty:
-    for _, row in filtered_df.iterrows():
-        # Using HTML for the "Card" look
-        st.markdown(f"""
-            <div class="mat-card">
-                <div class="mat-time">🕒 {row['Start Time']}</div>
-                <div class="school-name">{row['School']}</div>
-                <div style="color: #666; font-size: 0.9rem;">📍 {row['City']}</div>
-                <div class="style-tag">{row['Gi or Nogi']}</div>
-                {f'<div style="font-style: italic; margin-top: 10px; font-size: 0.85rem;">"{row["Notes"]}"</div>' if pd.notna(row['Notes']) else ''}
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Action Buttons (Map and Website)
-        btn_col1, btn_col2 = st.columns(2)
-        
-        with btn_col1:
-            # Google Maps Link
-            search_query = f"{row['School']} {row['Address']} {row['City']}".replace(" ", "+")
-            map_url = f"https://www.google.com/maps/search/?api=1&query={search_query}"
-            st.link_button("📍 Directions", map_url)
-            
-        with btn_col2:
-            if pd.notna(row['Website']):
-                st.link_button("🌐 Website", row['Website'])
-            else:
-                st.button("No Link", disabled=True)
-        
-        st.markdown("---")
-else:
-    st.info("No mats found for this selection. Rest up or find another day!")
-
-# Footer for Mobile
-st.markdown("<br><br><div style='text-align: center; color: gray;'>OSS 🥋 - DFW Mat Side v1.0</div>", unsafe_allow_html=True)
+except Exception as e:
+    st.error("Wait, I hit a snag with the data files. Make sure both CSVs are uploaded to GitHub!")
+    st.write(e)

@@ -5,64 +5,82 @@ from datetime import datetime
 # 1. Page Config
 st.set_page_config(page_title="DFW Mat Side", page_icon="🥋", layout="centered")
 
-# 2. CSS to Kill the Gaps and Force a Single Row
+# 2. Hardcoded High-Contrast CSS
 st.markdown("""
     <style>
-    /* 1. Eliminate main container margins */
-    .main .block-container { 
-        padding: 1rem 0.5rem !important; 
+    /* Force main text and headers to Black */
+    h1, h2, h3, p, span, label {
+        color: #000000 !important;
     }
-    
-    /* 2. Style the Radio buttons as a unified horizontal bar */
+
+    /* 1. Day Selection Bar Styling */
     div[data-testid="stRadio"] > div {
         display: flex !important;
         flex-direction: row !important;
         justify-content: space-between !important;
-        gap: 0px !important; /* This physically removes the gaps */
-        background-color: #f0f2f6;
+        gap: 2px !important;
+        background-color: #e0e0e0 !important; /* Grey background for the bar */
         border-radius: 8px;
-        padding: 2px;
+        padding: 4px;
     }
     
-    /* 3. Make each radio option look like a button */
+    /* Force Day Labels to be visible and Black */
     div[data-testid="stRadio"] label {
         flex: 1;
         text-align: center;
-        background-color: transparent;
-        border-radius: 6px;
-        padding: 6px 0px !important;
-        margin: 0px !important;
-        font-size: 0.75rem !important;
-        font-weight: 600;
-        border: none !important;
-    }
-    
-    /* 4. Hide the radio circle icon */
-    div[data-testid="stRadio"] label div[data-testid="stMarkdownContainer"] p {
-        font-size: 0.75rem !important;
-    }
-    div[data-testid="stStyle"] { display: none; }
-    
-    /* Style for when an item is selected */
-    div[data-testid="stRadio"] label[data-baseweb="radio"] {
-        background-color: #ffffff !important;
-        box-shadow: 0px 1px 3px rgba(0,0,0,0.1);
+        background-color: transparent !important;
+        color: #000000 !important;
+        font-size: 0.8rem !important;
+        font-weight: bold !important;
+        padding: 8px 0px !important;
     }
 
-    /* Card Styling */
+    /* Selected Day - White background, Black text */
+    div[data-testid="stRadio"] label[data-baseweb="radio"] {
+        background-color: #ffffff !important;
+        border-radius: 6px !important;
+        color: #000000 !important;
+    }
+
+    /* 2. Card Styling */
     .mat-card {
-        background-color: white;
+        background-color: #ffffff;
         border-radius: 12px;
         padding: 16px;
         margin-bottom: 12px;
-        border: 1px solid #eee;
+        border: 2px solid #000000; /* Thicker black border for visibility */
     }
-    .gym-title { font-size: 1.3rem; font-weight: 800; margin-bottom: 2px; }
-    .time-badge { color: #d32f2f; font-weight: 700; }
+    
+    .gym-title { 
+        color: #000000 !important; 
+        font-size: 1.4rem; 
+        font-weight: 900; 
+        line-height: 1.2;
+    }
+    
+    .time-badge { 
+        color: #d32f2f !important; 
+        font-weight: 800; 
+        font-size: 1.1rem;
+        margin: 4px 0px;
+    }
+
+    .style-text {
+        color: #000000 !important;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        margin-top: 5px;
+    }
+
+    /* 3. Dropdown Visibility */
+    div[data-baseweb="select"] > div {
+        border: 1px solid #000 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Data Prep
+# 3. Data Loading
 @st.cache_data
 def load_data():
     try:
@@ -78,41 +96,45 @@ def load_data():
 
 df = load_data()
 
-# 4. Day Rotation Logic
+# 4. Day Order Logic
 days_full = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 today_idx = datetime.now().weekday()
 ordered_days = days_full[today_idx:] + days_full[:today_idx]
 
-# Map names for the display
+# Visible labels for the radio bar
 day_map = {day: (day[:3] if day != days_full[today_idx] else "Tdy") for day in ordered_days}
 
 st.title("🥋 DFW Mat Side")
 
-# 5. The Segmented Control (The 7-Day Bar)
+# 5. Day Bar (Radio)
 selected_day_label = st.radio(
-    "Choose Day",
+    "Select Day",
     options=ordered_days,
     format_func=lambda x: day_map[x],
     label_visibility="collapsed"
 )
 
-# 6. Filters & Cards
-sel_style = st.selectbox("🥋 Style", ["All", "Gi", "No Gi", "Both"])
-filtered = df[df['Day'].str.contains(selected_day_label, na=False, case=False)].sort_values('sort_time')
+# 6. Style Filter
+sel_style = st.selectbox("🥋 Filter Style", ["All", "Gi", "No Gi", "Both"])
 
+# Filtering
+filtered = df[df['Day'].str.contains(selected_day_label, na=False, case=False)].sort_values('sort_time')
 if sel_style != "All":
     filtered = filtered[filtered['Gi or Nogi'] == sel_style]
 
 st.divider()
 
+# 7. Card Display
 if not filtered.empty:
     for i, row in filtered.iterrows():
+        # Using a Container and Markdown for total control
         st.markdown(f"""
             <div class="mat-card">
                 <div class="gym-title">{row['School']}</div>
                 <div class="time-badge">🕒 {row['Start Time']}</div>
-                <div style="color: #666; font-size: 0.9rem;">📍 {row['City']}</div>
-                <div style="background:#f0f2f6; display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-top:5px;">{row['Gi or Nogi']}</div>
+                <div style="color: #333; font-weight: 500;">📍 {row['City']}</div>
+                <div class="style-text">STYLE: {row['Gi or Nogi']}</div>
+                {f'<div style="margin-top:10px; font-size:0.85rem; color:#444; border-top:1px solid #eee; padding-top:5px;">{row["Notes"]}</div>' if pd.notna(row['Notes']) else ''}
             </div>
         """, unsafe_allow_html=True)
         
@@ -124,4 +146,6 @@ if not filtered.empty:
             if pd.notna(row['Website']) and str(row['Website']) != 'nan':
                 st.link_button("🌐 Web", row['Website'])
             else:
-                st.button("None", disabled=True, key=f"nw_{i}")
+                st.button("No Web", disabled=True, key=f"nw_{i}")
+else:
+    st.info(f"No mats found for {selected_day_label}.")

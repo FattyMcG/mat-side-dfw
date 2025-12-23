@@ -153,4 +153,14 @@ if not filtered.empty:
             </div>
         """, unsafe_allow_html=True)
         
-        b1, b2 =
+        b1, b2 = st.columns(2)
+        with b1:
+            q = f"{row['School']} {row['Address']}".replace(" ", "+")
+            st.link_button("📍 Maps", f"https://www.google.com/maps/search/?api=1&query={q}")
+        with b2:
+            if pd.notna(row['Website']) and str(row['Website']) != 'nan':
+                st.link_button("🌐 Web", row['Website'])
+            else:
+                st.button("No Web", disabled=True, key=f"nw_{i}")
+else:
+    st.info(f"No mats found for {selected_day_label}.")

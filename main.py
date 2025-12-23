@@ -5,10 +5,10 @@ from datetime import datetime
 # 1. Page Config
 st.set_page_config(page_title="DFW Mat Side", page_icon="🥋", layout="centered")
 
-# 2. CSS Overhaul
+# 2. Advanced CSS for High Contrast & Mobile Optimization
 st.markdown("""
     <style>
-    /* Force App Title and Selectbox Label to WHITE */
+    /* Force App Title and Style Filter label to WHITE */
     h1, [data-testid="stWidgetLabel"] p {
         color: #FFFFFF !important;
     }
@@ -18,30 +18,24 @@ st.markdown("""
         display: flex !important;
         flex-direction: row !important;
         justify-content: space-between !important;
-        gap: 2px !important;
+        gap: 0px !important; 
         background-color: #e0e0e0 !important; 
         border-radius: 8px;
         padding: 4px;
     }
     
-    /* Ensure Day Labels are strictly BLACK */
-    div[data-testid="stRadio"] label {
-        flex: 1;
-        text-align: center;
-        background-color: transparent !important;
-    }
-    
-    /* Targeting the text specifically for high contrast */
+    /* Ensure the Day Letters (M, T, W, T, F, S, S) are strictly BLACK */
     div[data-testid="stRadio"] label div[data-testid="stMarkdownContainer"] p {
         color: #000000 !important;
-        font-size: 0.85rem !important;
-        font-weight: 800 !important;
+        font-size: 0.9rem !important;
+        font-weight: 900 !important;
     }
 
     /* Selected Day - White background */
     div[data-testid="stRadio"] label[data-baseweb="radio"] {
         background-color: #ffffff !important;
         border-radius: 6px !important;
+        box-shadow: 0px 1px 3px rgba(0,0,0,0.2);
     }
 
     /* 2. Card Styling (White cards with Black text) */
@@ -57,27 +51,32 @@ st.markdown("""
         color: #000000 !important; 
         font-size: 1.4rem; 
         font-weight: 900; 
+        line-height: 1.2;
     }
     
     .time-badge { 
         color: #d32f2f !important; 
         font-weight: 800; 
         font-size: 1.1rem;
+        margin: 5px 0px;
     }
 
     .location-text {
         color: #000000 !important;
-        font-weight: 500;
+        font-weight: 600;
         margin-bottom: 5px;
     }
 
     .style-text {
         color: #000000 !important;
-        font-weight: 800;
+        font-weight: 900;
         font-size: 0.95rem;
         text-transform: uppercase;
         margin-top: 8px;
     }
+
+    /* Spacing fixes */
+    .stDivider { margin: 1rem 0; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -87,9 +86,12 @@ def load_data():
     try:
         mats = pd.read_csv("DFW Open Mats - Tracker - Open Mats.csv")
         schools = pd.read_csv("DFW Open Mats - Tracker - Schools.csv")
+        # Clean data
         mats = mats.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
         schools = schools.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+        # Merge website info
         df = pd.merge(mats, schools[['School', 'Website']], on='School', how='left')
+        # Sort by time
         df['sort_time'] = pd.to_datetime(df['Start Time'], errors='coerce').dt.time
         return df
     except:
@@ -97,39 +99,40 @@ def load_data():
 
 df = load_data()
 
-# 4. Custom Label Logic
+# 4. Day Label Logic (Single Letter)
 days_full = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 today_idx = datetime.now().weekday()
 ordered_days = days_full[today_idx:] + days_full[:today_idx]
 
-def get_day_label(day_name, is_today):
+def get_single_letter(day_name, is_today):
     if is_today: return "Tdy"
-    mapping = {"Monday": "M", "Tuesday": "Tu", "Wednesday": "W", "Thursday": "TR", "Friday": "F", "Saturday": "Sa", "Sunday": "Su"}
-    return mapping.get(day_name, day_name[:1])
+    # Mapping to M, T, W, T, F, S, S
+    return day_name[0]
 
-day_labels = {day: get_day_label(day, day == days_full[today_idx]) for day in ordered_days}
+day_labels = {day: get_single_letter(day, day == days_full[today_idx]) for day in ordered_days}
 
+# App Header
 st.title("DFW Mat Side")
 
-# 5. Day Selector (Radio Bar)
+# 5. The Compact 7-Day Bar
 selected_day_label = st.radio(
-    "Select Day",
+    "Day Selector",
     options=ordered_days,
     format_func=lambda x: day_labels[x],
     label_visibility="collapsed"
 )
 
-# 6. Style Filter with Emoji
+# 6. Style Filter with Gi Emoji
 sel_style = st.selectbox("🥋 Filter Style", ["All", "Gi", "No Gi", "Both"])
 
-# Filtering logic
+# Filtering
 filtered = df[df['Day'].str.contains(selected_day_label, na=False, case=False)].sort_values('sort_time')
 if sel_style != "All":
     filtered = filtered[filtered['Gi or Nogi'] == sel_style]
 
 st.divider()
 
-# 7. Card Display
+# 7. Results
 if not filtered.empty:
     for i, row in filtered.iterrows():
         st.markdown(f"""
@@ -142,6 +145,7 @@ if not filtered.empty:
             </div>
         """, unsafe_allow_html=True)
         
+        # Action Buttons
         b1, b2 = st.columns(2)
         with b1:
             q = f"{row['School']} {row['Address']}".replace(" ", "+")

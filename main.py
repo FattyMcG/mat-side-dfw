@@ -5,7 +5,7 @@ from datetime import datetime
 # 1. Page Config
 st.set_page_config(page_title="DFW Mat Side", page_icon="🥋", layout="centered")
 
-# 2. CSS (Unchanged as requested)
+# 2. CSS (Keeping your exact high-contrast style)
 st.markdown("""
     <style>
     h1, [data-testid="stWidgetLabel"] p { color: #FFFFFF !important; }
@@ -38,38 +38,50 @@ st.markdown("""
     .time-badge { color: #d32f2f !important; font-weight: 800; font-size: 1.1rem; margin: 5px 0px; }
     .location-text { color: #000000 !important; font-weight: 600; margin-bottom: 5px; }
     .style-text { color: #000000 !important; font-weight: 900; font-size: 0.95rem; text-transform: uppercase; margin-top: 8px; }
-    .stButton button { padding: 2px 5px !important; font-size: 0.7rem !important; }
+    
+    /* Make 4-across buttons look clean */
+    .stButton button {
+        padding: 2px 5px !important;
+        font-size: 0.65rem !important;
+        border: 1px solid #000 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Data Loading with Automatic Cleaning
+# 3. Data Merging Logic
 @st.cache_data
 def load_data():
     try:
+        # Load both files
         mats = pd.read_csv("DFW Open Mats - Tracker - Open Mats.csv")
         schools = pd.read_csv("DFW Open Mats - Tracker - Schools.csv")
         
-        # CLEANING: Remove hidden spaces from column names (Prevents KeyErrors)
+        # Clean column names and cell data to ensure the 'School' names match perfectly
         mats.columns = mats.columns.str.strip()
         schools.columns = schools.columns.str.strip()
         
-        # Strip spaces from data cells
-        mats = mats.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-        schools = schools.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+        mats['School'] = mats['School'].astype(str).str.strip()
+        schools['School'] = schools['School'].astype(str).str.strip()
         
-        # Merge - only use columns that actually exist
-        available_cols = [c for c in ['School', 'Website', 'Phone', 'Email'] if c in schools.columns]
-        df = pd.merge(mats, schools[available_cols], on='School', how='left')
+        # Merge contact info from Schools sheet into the Mats sheet based on School name
+        # We only bring in the columns we need: Website, Phone, Email
+        cols_to_use = ['School']
+        for col in ['Website', 'Phone', 'Email']:
+            if col in schools.columns:
+                cols_to_use.append(col)
         
+        df = pd.merge(mats, schools[cols_to_use], on='School', how='left')
+        
+        # Sortable time
         df['sort_time'] = pd.to_datetime(df['Start Time'], errors='coerce').dt.time
         return df
     except Exception as e:
-        st.error(f"Error loading data: {e}")
+        st.error(f"Data Connection Error: {e}")
         return pd.DataFrame()
 
 df = load_data()
 
-# 4. Logic & Layout (Unchanged)
+# 4. Navigation Logic
 days_full = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 today_idx = datetime.now().weekday()
 ordered_days = days_full[today_idx:] + days_full[:today_idx]
@@ -79,12 +91,14 @@ st.title("DFW Mat Side")
 selected_day_label = st.radio("Day", options=ordered_days, format_func=lambda x: day_labels[x], label_visibility="collapsed")
 sel_style = st.selectbox("🥋 Filter Style", ["All", "Gi", "No Gi", "Both"])
 
+# Filtering
 filtered = df[df['Day'].str.contains(selected_day_label, na=False, case=False)].sort_values('sort_time')
 if sel_style != "All":
     filtered = filtered[filtered['Gi or Nogi'] == sel_style]
 
 st.divider()
 
+# 5. Card Display
 if not filtered.empty:
     for i, row in filtered.iterrows():
         st.markdown(f"""
@@ -96,23 +110,27 @@ if not filtered.empty:
             </div>
         """, unsafe_allow_html=True)
         
-        # Action Buttons row
+        # Action Buttons (4-column row)
         b1, b2, b3, b4 = st.columns(4)
+        
         with b1:
             q = f"{row['School']} {row.get('Address', '')}".replace(" ", "+")
             st.link_button("📍 Maps", f"https://www.google.com/maps/search/?api=1&query={q}")
+        
         with b2:
-            if 'Website' in row and pd.notna(row['Website']):
+            if pd.notna(row.get('Website')):
                 st.link_button("🌐 Web", row['Website'])
             else:
                 st.button("None", disabled=True, key=f"w_{i}")
+
         with b3:
-            if 'Phone' in row and pd.notna(row['Phone']):
+            if pd.notna(row.get('Phone')):
                 st.link_button("📞 Call", f"tel:{row['Phone']}")
             else:
                 st.button("N/A", disabled=True, key=f"p_{i}")
+
         with b4:
-            if 'Email' in row and pd.notna(row['Email']):
+            if pd.notna(row.get('Email')):
                 st.link_button("✉️ Mail", f"mailto:{row['Email']}")
             else:
                 st.button("N/A", disabled=True, key=f"e_{i}")

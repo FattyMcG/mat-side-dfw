@@ -2,69 +2,142 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# 1. Page Config
-st.set_page_config(page_title="Mat Side DFW", page_icon="🥋", layout="wide")
+# 1. Optimized Page Config for Mobile
+st.set_page_config(
+    page_title="DFW Mat Side", 
+    page_icon="🥋", 
+    layout="centered", # Centered is often better for mobile readability
+    initial_sidebar_state="collapsed" # Hide sidebar by default on mobile
+)
 
-# Custom CSS to make the multi-select look more like "buttons" (Streamlit hack)
+# Custom CSS for a "Native App" Vibe on iPhone
 st.markdown("""
     <style>
-    .stMultiSelect div[data-baseweb="tag"] {
-        background-color: #007bff;
+    /* Main container padding */
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 5rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    /* Custom Card Styling */
+    .mat-card {
+        background-color: #f8f9fa;
+        border-radius: 15px;
+        padding: 15px;
+        margin-bottom: 15px;
+        border: 1px solid #e0e0e0;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    .mat-time {
+        color: #d32f2f;
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+    
+    .school-name {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin-top: 5px;
+    }
+    
+    .style-tag {
+        display: inline-block;
+        background-color: #333;
         color: white;
+        padding: 2px 8px;
+        border-radius: 5px;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        margin-top: 5px;
+    }
+    
+    /* Make buttons full width for thumbs */
+    .stButton button {
+        width: 100%;
+        border-radius: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🥋 Mat Side DFW")
-
-# 2. Load and Clean Data
+# 2. Data Loading & Merging
 @st.cache_data
-def load_data():
-    df = pd.read_csv("DFW Open Mats - Tracker - Open Mats.csv")
-    df['Day'] = df['Day'].str.strip()
+def load_and_prep_data():
+    # Load both files
+    mats_df = pd.read_csv("DFW Open Mats - Tracker - Open Mats.csv")
+    schools_df = pd.read_csv("DFW Open Mats - Tracker - Schools.csv")
     
-    # Convert 'Start Time' to a datetime object so we can sort it properly
-    # This handles formats like "11:00 AM"
+    # Cleaning
+    mats_df['Day'] = mats_df['Day'].str.strip()
+    mats_df['School'] = mats_df['School'].str.strip()
+    schools_df['School'] = schools_df['School'].str.strip()
+    
+    # Merge to get Website/Phone info from the Schools sheet
+    df = pd.merge(mats_df, schools_df[['School', 'Website', 'Phone']], on='School', how='left')
+    
+    # Sortable time logic
     df['sort_time'] = pd.to_datetime(df['Start Time'], errors='coerce').dt.time
     return df
 
-df = load_data()
+df = load_and_prep_data()
 
-# 3. Sidebar Setup
-st.sidebar.header("Find a Training Session")
+# 3. Top-Level Mobile Filters (No Sidebar needed)
+st.title("🥋 DFW Mat Side")
 
+# Day selector - using a selectbox for clean mobile UI
 days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 current_day = datetime.now().strftime("%A")
 
-selected_day = st.sidebar.selectbox("Choose a Day", ["Today"] + days_of_week)
+col1, col2 = st.columns(2)
+with col1:
+    selected_day = st.selectbox("📅 Day", ["Today"] + days_of_week)
+with col2:
+    style_filter = st.selectbox("🥋 Style", ["All", "Gi", "No Gi", "Both"])
+
 day_to_query = current_day if selected_day == "Today" else selected_day
 
-# Style Toggles (using multiselect which acts as toggle buttons)
-style_options = ["Gi", "No Gi", "Both"]
-selected_styles = st.sidebar.multiselect("Select Style(s)", style_options, default=style_options)
+# 4. Filtering Logic
+filtered_df = df[df['Day'] == day_to_query].sort_values(by='sort_time')
 
-# 4. Filter and Sort
-mask = (df['Day'] == day_to_query) & (df['Gi or Nogi'].isin(selected_styles))
-filtered_df = df[mask].sort_values(by='sort_time')
+if style_filter != "All":
+    filtered_df = filtered_df[filtered_df['Gi or Nogi'] == style_filter]
 
-# 5. Map View
-st.subheader(f"📍 Mats in DFW: {day_to_query}")
+# 5. Mobile-Optimized List View
+st.write(f"### {day_to_query} Schedule")
 
-# For the map to work, we'll use a placeholder or coordinates if available. 
-# Streamlit's st.map needs 'lat' and 'lon'. 
-# Note: For real-time address geocoding, we'd need a Google Maps API key, 
-# but for now, let's display the list and a placeholder map.
 if not filtered_df.empty:
-    # 6. List View (Sorted by Time)
     for _, row in filtered_df.iterrows():
-        with st.expander(f"**{row['Start Time']}** - {row['School']} ({row['City']})"):
-            st.write(f"🏠 **Address:** {row['Address']}")
-            st.write(f"🥋 **Style:** {row['Gi or Nogi']}")
-            if pd.notna(row['Notes']):
-                st.info(f"Note: {row['Notes']}")
+        # Using HTML for the "Card" look
+        st.markdown(f"""
+            <div class="mat-card">
+                <div class="mat-time">🕒 {row['Start Time']}</div>
+                <div class="school-name">{row['School']}</div>
+                <div style="color: #666; font-size: 0.9rem;">📍 {row['City']}</div>
+                <div class="style-tag">{row['Gi or Nogi']}</div>
+                {f'<div style="font-style: italic; margin-top: 10px; font-size: 0.85rem;">"{row["Notes"]}"</div>' if pd.notna(row['Notes']) else ''}
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Action Buttons (Map and Website)
+        btn_col1, btn_col2 = st.columns(2)
+        
+        with btn_col1:
+            # Google Maps Link
+            search_query = f"{row['School']} {row['Address']} {row['City']}".replace(" ", "+")
+            map_url = f"https://www.google.com/maps/search/?api=1&query={search_query}"
+            st.link_button("📍 Directions", map_url)
             
-            # Button to open in Google Maps
-            map_url = f"https://www.google.com/maps/search/?api=1&query={row['School']}+{row['Address']}".replace(' ', '+')
-            st.link_button("Open in Google Maps", map_url)
+        with btn_col2:
+            if pd.notna(row['Website']):
+                st.link_button("🌐 Website", row['Website'])
+            else:
+                st.button("No Link", disabled=True)
+        
+        st.markdown("---")
 else:
-    st.warning("No mats found for this selection. Try another day!")
+    st.info("No mats found for this selection. Rest up or find another day!")
+
+# Footer for Mobile
+st.markdown("<br><br><div style='text-align: center; color: gray;'>OSS 🥋 - DFW Mat Side v1.0</div>", unsafe_allow_html=True)

@@ -5,15 +5,15 @@ from datetime import datetime
 # 1. Page Config
 st.set_page_config(page_title="DFW Mat Side", page_icon="🥋", layout="centered")
 
-# 2. Updated CSS for White Title/Filters and High Contrast Cards
+# 2. CSS Overhaul
 st.markdown("""
     <style>
-    /* Force App Title and Filter Labels to WHITE */
-    h1, [data-testid="stMarkdownContainer"] p, label {
+    /* Force App Title and Selectbox Label to WHITE */
+    h1, [data-testid="stWidgetLabel"] p {
         color: #FFFFFF !important;
     }
 
-    /* 1. Day Selection Bar Styling (Grey bar with Black Text) */
+    /* 1. Day Selection Bar (Grey bar with Black Text) */
     div[data-testid="stRadio"] > div {
         display: flex !important;
         flex-direction: row !important;
@@ -24,15 +24,18 @@ st.markdown("""
         padding: 4px;
     }
     
-    /* Day Labels inside the bar (Black text) */
+    /* Ensure Day Labels are strictly BLACK */
     div[data-testid="stRadio"] label {
         flex: 1;
         text-align: center;
         background-color: transparent !important;
-        color: #000000 !important; /* Force Black text for names like Tu, TR, etc */
+    }
+    
+    /* Targeting the text specifically for high contrast */
+    div[data-testid="stRadio"] label div[data-testid="stMarkdownContainer"] p {
+        color: #000000 !important;
         font-size: 0.85rem !important;
-        font-weight: bold !important;
-        padding: 8px 0px !important;
+        font-weight: 800 !important;
     }
 
     /* Selected Day - White background */
@@ -65,20 +68,15 @@ st.markdown("""
     .location-text {
         color: #000000 !important;
         font-weight: 500;
+        margin-bottom: 5px;
     }
 
     .style-text {
         color: #000000 !important;
         font-weight: 800;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         text-transform: uppercase;
         margin-top: 8px;
-    }
-
-    /* 3. Dropdown Box styling */
-    div[data-baseweb="select"] > div {
-        background-color: white !important;
-        color: black !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -99,30 +97,21 @@ def load_data():
 
 df = load_data()
 
-# 4. Day Order & Custom Label Logic
+# 4. Custom Label Logic
 days_full = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 today_idx = datetime.now().weekday()
 ordered_days = days_full[today_idx:] + days_full[:today_idx]
 
-# Custom abbreviation mapping
 def get_day_label(day_name, is_today):
     if is_today: return "Tdy"
-    mapping = {
-        "Monday": "M",
-        "Tuesday": "Tu",
-        "Wednesday": "W",
-        "Thursday": "TR",
-        "Friday": "F",
-        "Saturday": "Sa",
-        "Sunday": "Su"
-    }
+    mapping = {"Monday": "M", "Tuesday": "Tu", "Wednesday": "W", "Thursday": "TR", "Friday": "F", "Saturday": "Sa", "Sunday": "Su"}
     return mapping.get(day_name, day_name[:1])
 
 day_labels = {day: get_day_label(day, day == days_full[today_idx]) for day in ordered_days}
 
 st.title("DFW Mat Side")
 
-# 5. Day Selector
+# 5. Day Selector (Radio Bar)
 selected_day_label = st.radio(
     "Select Day",
     options=ordered_days,
@@ -130,10 +119,10 @@ selected_day_label = st.radio(
     label_visibility="collapsed"
 )
 
-# 6. Style Filter
-sel_style = st.selectbox("Filter Style", ["All", "Gi", "No Gi", "Both"])
+# 6. Style Filter with Emoji
+sel_style = st.selectbox("🥋 Filter Style", ["All", "Gi", "No Gi", "Both"])
 
-# Filtering
+# Filtering logic
 filtered = df[df['Day'].str.contains(selected_day_label, na=False, case=False)].sort_values('sort_time')
 if sel_style != "All":
     filtered = filtered[filtered['Gi or Nogi'] == sel_style]
@@ -148,7 +137,7 @@ if not filtered.empty:
                 <div class="gym-title">{row['School']}</div>
                 <div class="time-badge">🕒 {row['Start Time']}</div>
                 <div class="location-text">📍 {row['City']}</div>
-                <div class="style-text">STYLE: {row['Gi or Nogi']}</div>
+                <div class="style-text">🥋 STYLE: {row['Gi or Nogi']}</div>
                 {f'<div style="margin-top:10px; font-size:0.85rem; color:#444; border-top:1px solid #eee; padding-top:5px;">{row["Notes"]}</div>' if pd.notna(row['Notes']) else ''}
             </div>
         """, unsafe_allow_html=True)

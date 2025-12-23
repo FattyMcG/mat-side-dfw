@@ -53,3 +53,76 @@ st.markdown("""
 # 3. Data Loading (Now including Email and Phone from your Schools sheet)
 @st.cache_data
 def load_data():
+    try:
+        mats = pd.read_csv("DFW Open Mats - Tracker - Open Mats.csv")
+        schools = pd.read_csv("DFW Open Mats - Tracker - Schools.csv")
+        mats = mats.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+        schools = schools.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+        # Merging Website, Phone, and Email
+        df = pd.merge(mats, schools[['School', 'Website', 'Phone', 'Email']], on='School', how='left')
+        df['sort_time'] = pd.to_datetime(df['Start Time'], errors='coerce').dt.time
+        return df
+    except:
+        return pd.DataFrame()
+
+df = load_data()
+
+# 4. Day Label Logic
+days_full = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+today_idx = datetime.now().weekday()
+ordered_days = days_full[today_idx:] + days_full[:today_idx]
+day_labels = {day: ("Tdy" if i == 0 else day[0]) for i, day in enumerate(ordered_days)}
+
+st.title("DFW Mat Side")
+
+selected_day_label = st.radio("Day Selector", options=ordered_days, format_func=lambda x: day_labels[x], label_visibility="collapsed")
+sel_style = st.selectbox("🥋 Filter Style", ["All", "Gi", "No Gi", "Both"])
+
+filtered = df[df['Day'].str.contains(selected_day_label, na=False, case=False)].sort_values('sort_time')
+if sel_style != "All":
+    filtered = filtered[filtered['Gi or Nogi'] == sel_style]
+
+st.divider()
+
+# 7. Card Display with 4 Action Buttons
+if not filtered.empty:
+    for i, row in filtered.iterrows():
+        st.markdown(f"""
+            <div class="mat-card">
+                <div class="gym-title">{row['School']}</div>
+                <div class="time-badge">🕒 {row['Start Time']}</div>
+                <div class="location-text">📍 {row['City']}</div>
+                <div class="style-text">🥋 STYLE: {row['Gi or Nogi']}</div>
+                {f'<div style="margin-top:10px; font-size:0.85rem; color:#444; border-top:1px solid #eee; padding-top:5px;">{row["Notes"]}</div>' if pd.notna(row['Notes']) else ''}
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # ACTION BUTTONS: 4-Column Layout
+        b1, b2, b3, b4 = st.columns(4)
+        
+        with b1:
+            q = f"{row['School']} {row['Address']}".replace(" ", "+")
+            st.link_button("📍 Maps", f"https://www.google.com/maps/search/?api=1&query={q}")
+        
+        with b2:
+            if pd.notna(row['Website']) and str(row['Website']) != 'nan':
+                st.link_button("🌐 Web", row['Website'])
+            else:
+                st.button("None", disabled=True, key=f"nw_{i}")
+
+        with b3:
+            if pd.notna(row['Phone']) and str(row['Phone']) != 'nan':
+                # Actionable tel: link
+                st.link_button("📞 Call", f"tel:{row['Phone']}")
+            else:
+                st.button("N/A", disabled=True, key=f"np_{i}")
+
+        with b4:
+            if pd.notna(row['Email']) and str(row['Email']) != 'nan':
+                # Actionable mailto: link
+                st.link_button("✉️ Mail", f"mailto:{row['Email']}")
+            else:
+                st.button("N/A", disabled=True, key=f"ne_{i}")
+else:
+    st.info(f"No mats found for {selected_day_label}.")
+
